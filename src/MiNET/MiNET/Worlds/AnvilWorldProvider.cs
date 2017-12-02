@@ -13,7 +13,7 @@
 // WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License for
 // the specific language governing rights and limitations under the License.
 // 
-// The Original Code is Niclas Olofsson.
+// The Original Code is MiNET.
 // 
 // The Original Developer is the Initial Developer.  The Initial Developer of
 // the Original Code is Niclas Olofsson.
@@ -31,11 +31,13 @@ using System.IO;
 using System.Linq;
 using System.Numerics;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using fNbt;
 using log4net;
 using MiNET.BlockEntities;
 using MiNET.Blocks;
+using MiNET.Items;
 using MiNET.Net;
 using MiNET.Utils;
 
@@ -77,6 +79,8 @@ namespace MiNET.Worlds
 		public bool ReadSkyLight { get; set; } = true;
 
 		public bool ReadBlockLight { get; set; } = true;
+
+		public bool Locked { get; set; } = false;
 
 		static AnvilWorldProvider()
 		{
@@ -141,8 +145,6 @@ namespace MiNET.Worlds
 				{158, new NoDataMapper(125)}, // minecraft:dropper
 				{166, new NoDataMapper(95)}, // minecraft:barrier		=> (Invisible Bedrock)
 				{167, new Mapper(167, (i, b) => (byte) (((b & 0x04) << 1) | ((b & 0x08) >> 1) | (3 - (b & 0x03))))}, //Fix iron_trapdoor
-				{176, air}, // minecraft:standing_banner		=> Air
-				{177, air}, // minecraft:wall_banner		=> Air
 				{188, new Mapper(85, (i, b) => 1)}, // Spruce Fence		=> Fence
 				{189, new Mapper(85, (i, b) => 2)}, // Birch Fence		=> Fence
 				{190, new Mapper(85, (i, b) => 3)}, // Jungle Fence		=> Fence
@@ -158,27 +160,23 @@ namespace MiNET.Worlds
 				{210, new NoDataMapper(188)}, // repeating_command_block
 				{211, new NoDataMapper(189)}, // minecraft:chain_command_block
 				{212, new NoDataMapper(297)}, // Frosted Ice
-				{213, new NoDataMapper(87)}, //minecraft:magma => netherrack
-				{214, new NoDataMapper(112)}, //nether_wart_block => nether_brick
-				{215, new NoDataMapper(112)}, //red_nether_brick
-				{216, new NoDataMapper(172)}, //bone => white hardened stained clay
 				{218, new NoDataMapper(251)}, // minecraft:observer => Observer
-				{219, new Mapper(201, (i, b) => 0)}, // => minecraft:white_shulker_box
-				{220, new Mapper(201, (i, b) => 1)}, // => minecraft:orange_shulker_box
-				{221, new Mapper(201, (i, b) => 2)}, // => minecraft:magenta_shulker_box
-				{222, new Mapper(201, (i, b) => 3)}, // => minecraft:light_blue_shulker_box 
-				{223, new Mapper(201, (i, b) => 4)}, // => minecraft:yellow_shulker_box 
-				{224, new Mapper(201, (i, b) => 5)}, // => minecraft:lime_shulker_box 
-				{225, new Mapper(201, (i, b) => 6)}, // => minecraft:pink_shulker_box 
-				{226, new Mapper(201, (i, b) => 7)}, // => minecraft:gray_shulker_box 
-				{227, new Mapper(201, (i, b) => 8)}, // => minecraft:light_gray_shulker_box 
-				{228, new Mapper(201, (i, b) => 9)}, // => minecraft:cyan_shulker_box 
-				{229, new Mapper(201, (i, b) => 10)}, // => minecraft:purple_shulker_box 
-				{230, new Mapper(201, (i, b) => 11)}, // => minecraft:blue_shulker_box 
-				{231, new Mapper(201, (i, b) => 12)}, // => minecraft:brown_shulker_box 
-				{232, new Mapper(201, (i, b) => 13)}, // => minecraft:green_shulker_box 
-				{233, new Mapper(201, (i, b) => 14)}, // => minecraft:red_shulker_box 
-				{234, new Mapper(201, (i, b) => 15)}, // => minecraft:black_shulker_box 
+				{219, new Mapper(218, (i, b) => 0)}, // => minecraft:white_shulker_box
+				{220, new Mapper(218, (i, b) => 1)}, // => minecraft:orange_shulker_box
+				{221, new Mapper(218, (i, b) => 2)}, // => minecraft:magenta_shulker_box
+				{222, new Mapper(218, (i, b) => 3)}, // => minecraft:light_blue_shulker_box 
+				{223, new Mapper(218, (i, b) => 4)}, // => minecraft:yellow_shulker_box 
+				{224, new Mapper(218, (i, b) => 5)}, // => minecraft:lime_shulker_box 
+				{225, new Mapper(218, (i, b) => 6)}, // => minecraft:pink_shulker_box 
+				{226, new Mapper(218, (i, b) => 7)}, // => minecraft:gray_shulker_box 
+				{227, new Mapper(218, (i, b) => 8)}, // => minecraft:light_gray_shulker_box 
+				{228, new Mapper(218, (i, b) => 9)}, // => minecraft:cyan_shulker_box 
+				{229, new Mapper(218, (i, b) => 10)}, // => minecraft:purple_shulker_box 
+				{230, new Mapper(218, (i, b) => 11)}, // => minecraft:blue_shulker_box 
+				{231, new Mapper(218, (i, b) => 12)}, // => minecraft:brown_shulker_box 
+				{232, new Mapper(218, (i, b) => 13)}, // => minecraft:green_shulker_box 
+				{233, new Mapper(218, (i, b) => 14)}, // => minecraft:red_shulker_box 
+				{234, new Mapper(218, (i, b) => 15)}, // => minecraft:black_shulker_box 
 
 				{235, new NoDataMapper(220)}, // => minecraft:white_glazed_terracotta
 				{236, new NoDataMapper(221)}, // => minecraft:orange_glazed_terracotta
@@ -268,6 +266,37 @@ namespace MiNET.Worlds
 			return 0;
 		}
 
+		public bool CachedChunksContains(ChunkCoordinates chunkCoord)
+		{
+			return _chunkCache.ContainsKey(chunkCoord);
+		}
+
+		public int UnloadChunks(Player[] players)
+		{
+			if (players.Length == 0) return 0;
+
+			int removed = 0;
+			List<ChunkCoordinates> coords = new List<ChunkCoordinates>();
+			foreach (var player in players)
+			{
+				coords.Add(new ChunkCoordinates(player.KnownPosition));
+			}
+
+			double maxDistance = Config.GetProperty("MaxViewDistance", 16)*1.5;
+
+			Parallel.ForEach(_chunkCache, (chunkColumn) =>
+			{
+				bool keep = coords.Exists(c => c.DistanceTo(chunkColumn.Key) < maxDistance);
+				if (!keep)
+				{
+					_chunkCache.TryRemove(chunkColumn.Key, out var waste);
+					Interlocked.Increment(ref removed);
+				}
+			});
+
+			return removed;
+		}
+
 		public ChunkColumn[] GetCachedChunks()
 		{
 			return _chunkCache.Values.Where(column => column != null).ToArray();
@@ -278,8 +307,15 @@ namespace MiNET.Worlds
 			_chunkCache.Clear();
 		}
 
-		public ChunkColumn GenerateChunkColumn(ChunkCoordinates chunkCoordinates)
+		public ChunkColumn GenerateChunkColumn(ChunkCoordinates chunkCoordinates, bool cacheOnly = false)
 		{
+			if (Locked || cacheOnly)
+			{
+				ChunkColumn chunk;
+				_chunkCache.TryGetValue(chunkCoordinates, out chunk);
+				return chunk;
+			}
+
 			// Warning: The following code MAY execute the GetChunk 2 times for the same coordinate
 			// if called in rapid succession. However, for the scenario of the provider, this is highly unlikely.
 			return _chunkCache.GetOrAdd(chunkCoordinates, coordinates => GetChunk(coordinates, BasePath, MissingChunkProvider));
@@ -304,7 +340,8 @@ namespace MiNET.Worlds
 					var chunkColumn = generator?.GenerateChunkColumn(coordinates);
 					if (chunkColumn != null)
 					{
-						//chunkColumn.NeedSave = true;
+						//SkyLightBlockAccess blockAccess = new SkyLightBlockAccess(this, chunkColumn);
+						//new SkyLightCalculations().RecalcSkyLight(chunkColumn, blockAccess);
 					}
 
 					return chunkColumn;
@@ -398,6 +435,7 @@ namespace MiNET.Worlds
 					}
 
 					NbtList entities = dataTag["Entities"] as NbtList;
+
 					NbtList blockEntities = dataTag["TileEntities"] as NbtList;
 					if (blockEntities != null)
 					{
@@ -414,6 +452,7 @@ namespace MiNET.Worlds
 								var id = entityId.Split(':')[1];
 
 								entityId = id.First().ToString().ToUpper() + id.Substring(1);
+								if (entityId == "Flower_pot") entityId = "FlowerPot";
 
 								blockEntityTag["id"] = new NbtString("id", entityId);
 							}
@@ -423,12 +462,14 @@ namespace MiNET.Worlds
 							if (blockEntity != null)
 							{
 								blockEntityTag.Name = string.Empty;
+								blockEntity.Coordinates = new BlockCoordinates(x, y, z);
 
 								if (blockEntity is Sign)
 								{
+								    if (Log.IsDebugEnabled) Log.Debug($"Loaded sign block entity\n{blockEntityTag}");
 									// Remove the JSON stuff and get the text out of extra data.
-									// TAG_String("Text2"): "{"extra":["10c a loaf!"],"text":""}"
-									CleanSignText(blockEntityTag, "Text1");
+                                    // TAG_String("Text2"): "{"extra":["10c a loaf!"],"text":""}"
+                                    CleanSignText(blockEntityTag, "Text1");
 									CleanSignText(blockEntityTag, "Text2");
 									CleanSignText(blockEntityTag, "Text3");
 									CleanSignText(blockEntityTag, "Text4");
@@ -439,36 +480,74 @@ namespace MiNET.Worlds
 
 									if (items != null)
 									{
-										//for (byte i = 0; i < items.Count; i++)
-										//{
-										//	NbtCompound item = (NbtCompound) items[i];
+										for (byte i = 0; i < items.Count; i++)
+										{
+											NbtCompound item = (NbtCompound) items[i];
 
-										//	item.Add(new NbtShort("OriginalDamage", item["Damage"].ShortValue));
+											string itemName = item["id"].StringValue;
+											if (itemName.StartsWith("minecraft:"))
+											{
+												var id = itemName.Split(':')[1];
 
-										//	byte metadata = (byte) (item["Damage"].ShortValue & 0xff);
-										//	item.Remove("Damage");
-										//	item.Add(new NbtByte("Damage", metadata));
-										//}
+												itemName = id.First().ToString().ToUpper() + id.Substring(1);
+											}
+
+											short itemId = ItemFactory.GetItemIdByName(itemName);
+											item.Remove("id");
+											item.Add(new NbtShort("id", itemId));
+										}
 									}
+								}
+								else if (blockEntity is FlowerPotBlockEntity)
+								{
+									string itemName = blockEntityTag["Item"].StringValue;
+									if (itemName.StartsWith("minecraft:"))
+									{
+										var id = itemName.Split(':')[1];
+
+										itemName = id.First().ToString().ToUpper() + id.Substring(1);
+									}
+
+									short itemId = ItemFactory.GetItemIdByName(itemName);
+									blockEntityTag.Remove("Item");
+									blockEntityTag.Add(new NbtShort("item", itemId));
+
+									var data = blockEntityTag["Data"].IntValue;
+									blockEntityTag.Remove("Data");
+									blockEntityTag.Add(new NbtInt("mData", data));
+								}
+								else
+								{
+									if (Log.IsDebugEnabled) Log.Debug($"Loaded block entity\n{blockEntityTag}");
+									blockEntity.SetCompound(blockEntityTag);
+									blockEntityTag = blockEntity.GetCompound();
 								}
 
 								chunk.SetBlockEntity(new BlockCoordinates(x, y, z), blockEntityTag);
 							}
 							else
 							{
-								if (Log.IsDebugEnabled)
-									Log.Debug($"Loaded unknown block entity: {blockEntityTag}");
+								if (Log.IsDebugEnabled) Log.Debug($"Loaded unknown block entity\n{blockEntityTag}");
 							}
 						}
 					}
 
 					//NbtList tileTicks = dataTag["TileTicks"] as NbtList;
 
+					chunk.RecalcHeight();
+
 					chunk.isDirty = false;
 					chunk.NeedSave = false;
+
+					if (Config.GetProperty("CalculateLights", false))
+					{
+						SkyLightBlockAccess blockAccess = new SkyLightBlockAccess(this, chunk);
+						new SkyLightCalculations().RecalcSkyLight(chunk, blockAccess);
+						//TODO: Block lights.
+					}
+
 					return chunk;
 				}
-
 			}
 			catch (Exception e)
 			{
@@ -542,21 +621,19 @@ namespace MiNET.Worlds
 						{
 							chunk.SetBlocklight(x, y, z, Nibble4(blockLight, anvilIndex));
 						}
+
 						if (ReadSkyLight)
 						{
 							chunk.SetSkylight(x, y, z, Nibble4(skyLight, anvilIndex));
 						}
+						else
+						{
+							chunk.SetSkylight(x, y, z, 0);
+						}
 
 						if (blockId == 0) continue;
 
-						if (convertBid && blockId == 3 && metadata == 1)
-						{
-							// Dirt Course => (Grass Path)
-							chunk.SetBlock(x, y, z, 198);
-							chunk.SetMetadata(x, y, z, 0);
-							blockId = 198;
-						}
-						else if (convertBid && blockId == 3 && metadata == 2)
+						if (convertBid && blockId == 3 && metadata == 2)
 						{
 							// Dirt Podzol => (Podzol)
 							chunk.SetBlock(x, y, z, 243);
@@ -564,25 +641,26 @@ namespace MiNET.Worlds
 							blockId = 243;
 						}
 
-						if (BlockFactory.LuminousBlocks.ContainsKey(blockId))
+						if (BlockFactory.LuminousBlocks[blockId] != 0)
 						{
 							var block = BlockFactory.GetBlockById(chunk.GetBlock(x, y, z));
 							block.Coordinates = new BlockCoordinates(x + (chunkColumn.x << 4), yi, z + (chunkColumn.z << 4));
-							LightSources.Enqueue(block);
+							chunk.SetBlocklight(x, y, z, (byte) block.LightLevel);
+							lock (LightSources) LightSources.Enqueue(block);
 						}
 					}
 				}
 			}
 		}
 
-		private static Regex _regex = new Regex(@"^((\{""extra"":\[)?)""(.*?)""(],""text"":""""})?$");
+	    private static Regex _regex = new Regex(@"^((\{""extra"":\[)?)(\{""text"":"".*?""})(],)?(""text"":"".*?""})?$");
 
-		private static void CleanSignText(NbtCompound blockEntityTag, string tagName)
-		{
-			var text = blockEntityTag[tagName].StringValue;
-			var replace = /*Regex.Unescape*/(_regex.Replace(text, "$3"));
-			blockEntityTag[tagName] = new NbtString(tagName, replace);
-		}
+	    private static void CleanSignText(NbtCompound blockEntityTag, string tagName)
+	    {
+	        var text = blockEntityTag[tagName].StringValue;
+	        var replace = /*Regex.Unescape*/(_regex.Replace(text, "$3"));
+	        blockEntityTag[tagName] = new NbtString(tagName, replace);
+	    }
 
 		private static byte Nibble4(byte[] arr, int index)
 		{
@@ -616,8 +694,12 @@ namespace MiNET.Worlds
 
 		public long GetTime()
 		{
-			return 6000;
-			//return LevelInfo.Time;
+			return LevelInfo.Time;
+		}
+
+		public long GetDayTime()
+		{
+			return LevelInfo.DayTime;
 		}
 
 		public string GetName()
@@ -642,6 +724,8 @@ namespace MiNET.Worlds
 
 		public int SaveChunks()
 		{
+			if (!Config.GetProperty("Save.Enabled", false)) return 0;
+
 			int count = 0;
 			try
 			{

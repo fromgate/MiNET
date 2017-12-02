@@ -50,7 +50,7 @@ namespace MiNET.BuilderBase.Tools
 		}
 
 
-		public override void UseItem(Level world, Player player, BlockCoordinates blockCoordinates, BlockFace face, Vector3 faceCoords)
+		public override void PlaceBlock(Level world, Player player, BlockCoordinates blockCoordinates, BlockFace face, Vector3 faceCoords)
 		{
 			SetPosition2(player, blockCoordinates);
 		}
@@ -105,7 +105,7 @@ namespace MiNET.BuilderBase.Tools
 
 			player.SendMessage($"First position set to {pos}");
 			UpdateExtraData(player);
-			player.Inventory.SendSetSlot(player.Inventory.ItemHotbar[player.Inventory.InHandSlot]);
+			player.Inventory.SendSetSlot(player.Inventory.InHandSlot);
 		}
 
 		public void SetPosition2(Player player, BlockCoordinates pos)
@@ -120,7 +120,7 @@ namespace MiNET.BuilderBase.Tools
 
 			player.SendMessage($"Second position set to {pos}");
 			UpdateExtraData(player);
-			player.Inventory.SendSetSlot(player.Inventory.ItemHotbar[player.Inventory.InHandSlot]);
+			player.Inventory.SendSetSlot(player.Inventory.InHandSlot);
 		}
 	}
 }

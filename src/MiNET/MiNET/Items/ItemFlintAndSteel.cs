@@ -47,12 +47,12 @@ namespace MiNET.Items
 			MaxStackSize = 1;
 		}
 
-		public override void UseItem(Level world, Player player, BlockCoordinates blockCoordinates, BlockFace face, Vector3 faceCoords)
+		public override void PlaceBlock(Level world, Player player, BlockCoordinates blockCoordinates, BlockFace face, Vector3 faceCoords)
 		{
 			var block = world.GetBlock(blockCoordinates);
 			if (block is Tnt)
 			{
-				world.SetBlock(new Air() {Coordinates = block.Coordinates});
+				world.SetAir(block.Coordinates);
 				new PrimedTnt(world)
 				{
 					KnownPosition = new PlayerLocation(blockCoordinates.X, blockCoordinates.Y, blockCoordinates.Z),

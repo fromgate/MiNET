@@ -13,7 +13,7 @@
 // WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License for
 // the specific language governing rights and limitations under the License.
 // 
-// The Original Code is Niclas Olofsson.
+// The Original Code is MiNET.
 // 
 // The Original Developer is the Initial Developer.  The Initial Developer of
 // the Original Code is Niclas Olofsson.
@@ -23,6 +23,7 @@
 
 #endregion
 
+using log4net;
 using MiNET.Plugins;
 using MiNET.Plugins.Attributes;
 
@@ -31,6 +32,8 @@ namespace MiNET.Plotter
 	[Plugin(PluginName = "Plotter", Description = "Basic plot server plugin for MiNET", PluginVersion = "1.0", Author = "MiNET Team")]
 	public class PlotterPlugin : Plugin, IStartup
 	{
+		private static readonly ILog Log = LogManager.GetLogger(typeof (PlotterPlugin));
+
 		public void Configure(MiNetServer server)
 		{
 			server.LevelManager = new PlotterLevelManager();
@@ -43,9 +46,5 @@ namespace MiNET.Plotter
 			PlotManager plotManager = new PlotManager();
 			Context.PluginManager.LoadCommands(new PlotCommands(plotManager));
 		}
-	}
-
-	public class PlotManager
-	{
 	}
 }

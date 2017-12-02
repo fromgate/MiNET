@@ -13,7 +13,7 @@
 // WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License for
 // the specific language governing rights and limitations under the License.
 // 
-// The Original Code is Niclas Olofsson.
+// The Original Code is MiNET.
 // 
 // The Original Developer is the Initial Developer.  The Initial Developer of
 // the Original Code is Niclas Olofsson.
@@ -38,7 +38,6 @@ namespace MiNET.Plotter
 			if (level == null)
 			{
 				int viewDistance = Config.GetProperty("ViewDistance", 11);
-				bool isWorldTimeStarted = Config.GetProperty("IsWorldTimeStarted", false);
 
 				string basePath = Config.GetProperty("PCWorldFolder", "World").Trim();
 
@@ -51,7 +50,27 @@ namespace MiNET.Plotter
 
 				level = new Level(this, name, worldProvider, EntityManager, GameMode.Creative, Difficulty.Normal, viewDistance)
 				{
-					IsWorldTimeStarted = isWorldTimeStarted
+					EnableBlockTicking = Config.GetProperty("EnableBlockTicking", false),
+					EnableChunkTicking = Config.GetProperty("EnableChunkTicking", false),
+					DrowningDamage = Config.GetProperty("GameRule.DrowningDamage", true),
+					CommandblockOutput = Config.GetProperty("GameRule.CommandblockOutput", true),
+					DoTiledrops = Config.GetProperty("GameRule.DoTiledrops", true),
+					DoMobloot = Config.GetProperty("GameRule.DoMobloot", true),
+					KeepInventory = Config.GetProperty("GameRule.KeepInventory", true),
+					DoDaylightcycle = Config.GetProperty("GameRule.DoDaylightcycle", true),
+					DoMobspawning = Config.GetProperty("GameRule.DoMobspawning", true),
+					DoEntitydrops = Config.GetProperty("GameRule.DoEntitydrops", true),
+					DoFiretick = Config.GetProperty("GameRule.DoFiretick", true),
+					DoWeathercycle = Config.GetProperty("GameRule.DoWeathercycle", true),
+					Pvp = Config.GetProperty("GameRule.Pvp", true),
+					Falldamage = Config.GetProperty("GameRule.Falldamage", true),
+					Firedamage = Config.GetProperty("GameRule.Firedamage", true),
+					Mobgriefing = Config.GetProperty("GameRule.Mobgriefing", true),
+					ShowCoordinates = Config.GetProperty("GameRule.ShowCoordinates", true),
+					NaturalRegeneration = Config.GetProperty("GameRule.NaturalRegeneration", true),
+					TntExplodes = Config.GetProperty("GameRule.TntExploads", true),
+					SendCommandfeedback = Config.GetProperty("GameRule.SendCommandfeedback", true),
+					RandomTickSpeed = Config.GetProperty("GameRule.RandomTickSpeed", 3),
 				};
 				level.Initialize();
 

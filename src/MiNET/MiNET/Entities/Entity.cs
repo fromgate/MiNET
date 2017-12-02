@@ -13,7 +13,7 @@
 // WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License for
 // the specific language governing rights and limitations under the License.
 // 
-// The Original Code is Niclas Olofsson.
+// The Original Code is MiNET.
 // 
 // The Original Developer is the Initial Developer.  The Initial Developer of
 // the Original Code is Niclas Olofsson.
@@ -25,7 +25,10 @@
 
 using System;
 using System.Collections;
+using System.Collections.Generic;
+using System.Globalization;
 using System.Numerics;
+using System.Text;
 using log4net;
 using MiNET.Blocks;
 using MiNET.Items;
@@ -42,7 +45,7 @@ namespace MiNET.Entities
 
 		public Level Level { get; set; }
 
-		public int EntityTypeId { get; private set; }
+		public int EntityTypeId { get; protected set; }
 		public long EntityId { get; set; }
 		public bool IsSpawned { get; set; }
 
@@ -50,6 +53,7 @@ namespace MiNET.Entities
 		public PlayerLocation KnownPosition { get; set; }
 		public Vector3 Velocity { get; set; }
 		public float PositionOffset { get; set; }
+		public bool IsOnGround { get; set; } = true;
 
 		public HealthManager HealthManager { get; set; }
 
@@ -63,11 +67,12 @@ namespace MiNET.Entities
 
 		public long Age { get; set; }
 		public double Scale { get; set; } = 1.0;
-		public double Height { get; set; } = 1;
-		public double Width { get; set; } = 1;
-		public double Length { get; set; } = 1;
+		public virtual double Height { get; set; } = 1;
+		public virtual double Width { get; set; } = 1;
+		public virtual double Length { get; set; } = 1;
 		public double Drag { get; set; } = 0.02;
 		public double Gravity { get; set; } = 0.08;
+		public int AttackDamage { get; set; } = 2;
 		public int Data { get; set; }
 
 		public long PortalDetected { get; set; }
@@ -92,7 +97,7 @@ namespace MiNET.Entities
 			Scale = 39,
 			MaxAir = 43,
 			CollisionBoxWidth = 54,
-			CollisionBoxHeight = 55,
+			CollisionBoxHeight = 55
 		}
 
 		public virtual MetadataDictionary GetMetadata()
@@ -133,7 +138,112 @@ namespace MiNET.Entities
 
 			long dataValue = BitConverter.ToInt64(bytes, 0);
 			//Log.Debug($"Bit-array datavalue: dec={dataValue} hex=0x{dataValue:x2}, bin={Convert.ToString((long) dataValue, 2)}b ");
+			//if (Log.IsDebugEnabled) Log.Debug($"// {Convert.ToString(dataValue, 2)}; {FlagsToString(dataValue)}");
 			return dataValue;
+		}
+
+		public static string MetadataToCode(MetadataDictionary metadata)
+		{
+			StringBuilder sb = new StringBuilder();
+
+			sb.AppendLine();
+			sb.AppendLine("MetadataDictionary metadata = new MetadataDictionary();");
+
+			foreach (var kvp in metadata._entries)
+			{
+				int idx = kvp.Key;
+				MetadataEntry entry = kvp.Value;
+
+				sb.Append($"metadata[{idx}] = new ");
+				switch (entry.Identifier)
+				{
+					case 0:
+					{
+						var e = (MetadataByte) entry;
+						sb.Append($"{e.GetType().Name}({e.Value});");
+						break;
+					}
+					case 1:
+					{
+						var e = (MetadataShort) entry;
+						sb.Append($"{e.GetType().Name}({e.Value});");
+						break;
+					}
+					case 2:
+					{
+						var e = (MetadataInt) entry;
+						sb.Append($"{e.GetType().Name}({e.Value});");
+						break;
+					}
+					case 3:
+					{
+						var e = (MetadataFloat) entry;
+						sb.Append($"{e.GetType().Name}({e.Value.ToString(NumberFormatInfo.InvariantInfo)}f);");
+						break;
+					}
+					case 4:
+					{
+						var e = (MetadataString) entry;
+						sb.Append($"{e.GetType().Name}(\"{e.Value}\");");
+						break;
+					}
+					case 5:
+					{
+						var e = (MetadataSlot) entry;
+						sb.Append($"{e.GetType().Name}({e.Value});");
+						break;
+					}
+					case 6:
+					{
+						var e = (MetadataIntCoordinates) entry;
+						sb.Append($"{e.GetType().Name}({e.Value});");
+						break;
+					}
+					case 7:
+					{
+						var e = (MetadataLong) entry;
+						sb.Append($"{e.GetType().Name}({e.Value});");
+						if (idx == 0)
+						{
+							sb.Append($" // {Convert.ToString((long) e.Value, 2)}; {FlagsToString(e.Value)}");
+						}
+						break;
+					}
+					case 8:
+					{
+						var e = (MetadataVector3) entry;
+						sb.Append($"{e.GetType().Name}({e.Value});");
+						break;
+					}
+				}
+				sb.AppendLine();
+			}
+
+			return sb.ToString();
+		}
+
+		private static string FlagsToString(long input)
+		{
+			BitArray bits = new BitArray(BitConverter.GetBytes(input));
+
+			byte[] bytes = new byte[8];
+			bits.CopyTo(bytes, 0);
+
+			List<DataFlags> flags = new List<DataFlags>();
+			foreach (var val in Enum.GetValues(typeof (DataFlags)))
+			{
+				if (bits[(int) val]) flags.Add((DataFlags) val);
+			}
+
+			StringBuilder sb = new StringBuilder();
+			sb.Append(string.Join(", ", flags));
+			sb.Append("; ");
+			for (var i = 0; i < bits.Count; i++)
+			{
+				if (bits[i]) sb.Append($"{i}, ");
+			}
+
+			return sb.ToString();
 		}
 
 		public bool IsSneaking { get; set; }
@@ -166,10 +276,14 @@ namespace MiNET.Entities
 		public bool IsSheared { get; set; }
 		public bool IsGliding { get; set; }
 		public bool IsElder { get; set; }
+		public bool IsIdling { get; set; }
+		public bool IsVibrating { get; set; }
 		public bool IsMoving { get; set; }
 		public bool IsBreathing => !IsInWater;
 		public bool IsChested { get; set; }
 		public bool IsStackable { get; set; }
+		public bool HasCollision { get; set; }
+		public bool IsAffectedByGravity { get; set; }
 
 		public enum DataFlags
 		{
@@ -215,6 +329,17 @@ namespace MiNET.Entities
 			Chested,
 
 			Stackable,
+			Showbase,
+			Rearing,
+			Vibrating,
+			Idling,
+			EvokerSpell,
+			ChargeAttack,
+			Unknown42,
+			Unknown43,
+			Linger,
+			HasCollision,
+			AffectedByGravity
 		}
 
 		protected virtual BitArray GetFlags()
@@ -254,6 +379,11 @@ namespace MiNET.Entities
 			bits[(int) DataFlags.Breathing] = IsBreathing;
 			bits[(int) DataFlags.Chested] = IsChested;
 			bits[(int) DataFlags.Stackable] = IsStackable;
+			bits[(int) DataFlags.Idling] = IsIdling;
+			bits[(int) DataFlags.Vibrating] = IsVibrating;
+
+			bits[(int) DataFlags.HasCollision] = HasCollision;
+			bits[(int) DataFlags.AffectedByGravity] = IsAffectedByGravity;
 
 			return bits;
 		}
@@ -266,8 +396,10 @@ namespace MiNET.Entities
 			return Level.GetBlock(KnownPosition + new Vector3(0, 0.3f, 0)) is Portal;
 		}
 
-		public virtual void OnTick()
+		public virtual void OnTick(Entity[] entities)
 		{
+			SeenEntities.Clear();
+			UnseenEntities.Clear();
 			Age++;
 
 			HealthManager.OnTick();
@@ -297,26 +429,12 @@ namespace MiNET.Entities
 			addEntity.yaw = KnownPosition.Yaw;
 			addEntity.pitch = KnownPosition.Pitch;
 			addEntity.metadata = GetMetadata();
-			addEntity.speedX = (float) Velocity.X;
-			addEntity.speedY = (float) Velocity.Y;
-			addEntity.speedZ = (float) Velocity.Z;
+			addEntity.speedX = Velocity.X;
+			addEntity.speedY = Velocity.Y;
+			addEntity.speedZ = Velocity.Z;
 			addEntity.attributes = GetEntityAttributes();
 
 			Level.RelayBroadcast(players, addEntity);
-
-			var msg = addEntity;
-			Log.DebugFormat("McpeAddEntity Entity ID: {0}", msg.entityIdSelf);
-			Log.DebugFormat("McpeAddEntity Runtime Entity ID: {0}", msg.runtimeEntityId);
-			Log.DebugFormat("Entity Type: {0}", msg.entityType);
-			Log.DebugFormat("X: {0}", msg.x);
-			Log.DebugFormat("Y: {0}", msg.y);
-			Log.DebugFormat("Z: {0}", msg.z);
-			Log.DebugFormat("Yaw: {0}", msg.yaw);
-			Log.DebugFormat("Pitch: {0}", msg.pitch);
-			Log.DebugFormat("Velocity X: {0}", msg.speedX);
-			Log.DebugFormat("Velocity Y: {0}", msg.speedY);
-			Log.DebugFormat("Velocity Z: {0}", msg.speedZ);
-			Log.DebugFormat("Metadata: {0}", MetadataDictionary.MetadataToCode(msg.metadata));
 		}
 
 		public virtual EntityAttributes GetEntityAttributes()
@@ -325,51 +443,51 @@ namespace MiNET.Entities
 			attributes["minecraft:attack_damage"] = new EntityAttribute
 			{
 				Name = "minecraft:attack_damage",
-				MinValue = 1,
-				MaxValue = 1,
-				Value = 1,
+				MinValue = 0,
+				MaxValue = 16,
+				Value = AttackDamage
 			};
 			attributes["minecraft:absorption"] = new EntityAttribute
 			{
 				Name = "minecraft:absorption",
 				MinValue = 0,
 				MaxValue = float.MaxValue,
-				Value = HealthManager.Absorption,
+				Value = HealthManager.Absorption
 			};
 			attributes["minecraft:health"] = new EntityAttribute
 			{
 				Name = "minecraft:health",
 				MinValue = 0,
 				MaxValue = 20,
-				Value = HealthManager.Hearts,
+				Value = HealthManager.Hearts
 			};
 			attributes["minecraft:knockback_resistance"] = new EntityAttribute
 			{
 				Name = "minecraft:knockback_resistance",
 				MinValue = 0,
 				MaxValue = 1,
-				Value = 0,
+				Value = 0
 			};
 			attributes["minecraft:luck"] = new EntityAttribute
 			{
 				Name = "minecraft:luck",
 				MinValue = -1025,
 				MaxValue = 1024,
-				Value = 0,
+				Value = 0
 			};
 			attributes["minecraft:fall_damage"] = new EntityAttribute
 			{
 				Name = "minecraft:fall_damage",
 				MinValue = 0,
 				MaxValue = float.MaxValue,
-				Value = 1,
+				Value = 0
 			};
 			attributes["minecraft:follow_range"] = new EntityAttribute
 			{
 				Name = "minecraft:follow_range",
 				MinValue = 0,
 				MaxValue = 2048,
-				Value = 16,
+				Value = 16
 			};
 
 			return attributes;
@@ -405,12 +523,51 @@ namespace MiNET.Entities
 			Level.RelayBroadcast(entityEvent);
 		}
 
+
+		public bool IsColliding(Entity other)
+		{
+			return IsColliding(GetBoundingBox(), other);
+		}
+
+		public bool IsColliding(BoundingBox bbox, Entity other)
+		{
+			//if (!Compare((int) KnownPosition.X, (int) other.KnownPosition.X, 5)) return false;
+			//if (!Compare((int) KnownPosition.Z, (int) other.KnownPosition.Z, 5)) return false;
+			if (!Compare((int) KnownPosition.X, (int) other.KnownPosition.X, 4)) return false;
+			if (!Compare((int) KnownPosition.Z, (int) other.KnownPosition.Z, 4)) return false;
+			if (!bbox.Intersects(other.GetBoundingBox())) return false;
+
+			return true;
+		}
+
+
+		private bool Compare(int a, int b, int m)
+		{
+			a = a >> m;
+			b = b >> m;
+			return a == b || a == b - 1 || a == b + 1;
+		}
+
+		private Tuple<Vector3, BoundingBox> _bboxCache = new Tuple<Vector3, BoundingBox>(new Vector3(0, -1000, 0), new BoundingBox());
+
 		public BoundingBox GetBoundingBox()
 		{
 			var pos = KnownPosition;
-			double halfWidth = Width/2;
+			//if (Math.Abs(pos.X - _bboxCache.Item1.X) < 0.01 && Math.Abs(pos.Y - _bboxCache.Item1.Y) < 0.01 && Math.Abs(pos.Z - _bboxCache.Item1.Z) < 0.01) return _bboxCache.Item2;
 
-			return new BoundingBox(new Vector3((float) (pos.X - halfWidth), pos.Y, (float) (pos.Z - halfWidth)), new Vector3((float) (pos.X + halfWidth), (float) (pos.Y + Height), (float) (pos.Z + halfWidth)));
+			float halfWidth = (float) (Width/2);
+
+			var bbox = new BoundingBox(
+				Vector3.Min(new Vector3(pos.X - halfWidth, pos.Y, pos.Z - halfWidth), new Vector3(pos.X + halfWidth, pos.Y, pos.Z + halfWidth)),
+				Vector3.Max(new Vector3(pos.X - halfWidth, (float) (pos.Y - Height), pos.Z - halfWidth), new Vector3(pos.X + halfWidth, (float) (pos.Y + Height), pos.Z + halfWidth)));
+			//_bboxCache = new Tuple<Vector3, BoundingBox>(KnownPosition, bbox);
+			return bbox;
+		}
+
+		public double DistanceToHorizontal(Entity entity)
+		{
+			if (entity == null) return -1;
+			return Vector2.Distance(KnownPosition, entity.KnownPosition);
 		}
 
 		public double DistanceTo(Entity entity)
@@ -466,6 +623,7 @@ namespace MiNET.Entities
 				McpeMoveEntity moveEntity = McpeMoveEntity.CreateObject();
 				moveEntity.runtimeEntityId = EntityId;
 				moveEntity.position = (PlayerLocation) KnownPosition.Clone();
+				moveEntity.onGround = IsOnGround;
 				moveEntity.Encode();
 				Level.RelayBroadcast(moveEntity);
 			}
@@ -483,6 +641,53 @@ namespace MiNET.Entities
 
 		public virtual void DoMouseOverInteraction(byte actionId, Player player)
 		{
+			if (!string.IsNullOrEmpty(player.ButtonText))
+			{
+				player.ButtonText = null;
+				player.SendSetEntityData();
+			}
+		}
+
+		public HashSet<Entity> SeenEntities { get; set; } = new HashSet<Entity>();
+		public HashSet<Entity> UnseenEntities { get; set; } = new HashSet<Entity>();
+
+		public virtual bool CanSee(Entity target)
+		{
+			if (SeenEntities.Contains(target)) return true;
+			if (UnseenEntities.Contains(target)) return false;
+
+			Vector3 entityPos = KnownPosition + new Vector3(0, (float) (this is Player ? 1.62f : Height), 0);
+			Vector3 targetPos = target.KnownPosition + new Vector3(0, (float) (target is Player ? 1.62f : target.Height), 0);
+			float distance = Vector3.Distance(entityPos, targetPos);
+
+			Vector3 rayPos = entityPos;
+			var direction = Vector3.Normalize(targetPos - entityPos);
+
+			if (distance < direction.Length())
+			{
+				UnseenEntities.Add(target);
+				return true;
+			}
+
+			do
+			{
+				if (Level.GetBlock(rayPos).IsSolid)
+				{
+					//Log.Debug($"{GetType()} can not see target");
+					//BroadcastEntityEvent();
+					UnseenEntities.Add(target);
+					return false;
+				}
+
+				//var particle = new DustParticle(Level, Color.AntiqueWhite);
+				//particle.Position = rayPos;
+				//particle.Spawn();
+
+				rayPos += direction;
+			} while (distance > Vector3.Distance(entityPos, rayPos));
+
+			SeenEntities.Add(target);
+			return true;
 		}
 	}
 }
